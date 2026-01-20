@@ -48,8 +48,10 @@ android {
 
     sourceSets {
         main {
+            // Avoid packaging prebuilt libs from src/main/jni/lib as jniLibs.
+            // Those libs are already provided via CMake IMPORTED targets.
             jni.srcDirs = []
-            jniLibs.srcDir 'src/main/jni/lib'
+            jniLibs.srcDirs = []
         }
     }
 
