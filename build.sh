@@ -65,7 +65,8 @@ build_libpng() {
             -DBUILD_SHARED_LIBS:BOOL=true \
             -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
             -DANDROID_ABI=${ABI} \
-            -DCMAKE_SYSTEM_NAME=Android
+            -DCMAKE_SYSTEM_NAME=Android \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=0x4000"
         check_command_result "configuring libpng"
         cmake --build ${BUILD_DIR} -j10
         check_command_result "building libpng"
@@ -93,7 +94,8 @@ build_libfreetype2() {
             -DBUILD_SHARED_LIBS:BOOL=true \
             -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
             -DANDROID_ABI=${ABI} \
-            -DCMAKE_SYSTEM_NAME=Android
+            -DCMAKE_SYSTEM_NAME=Android \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=0x4000"
         check_command_result "configuring freetype"
         cmake --build ${BUILD_DIR} -j10
         check_command_result "building freetype"
@@ -115,7 +117,8 @@ build_pdfiumAndroid() {
             -DCMAKE_ANDROID_ARCH_ABI=${ABI} \
             -DANDROID_ABI=${ABI} \
             -DANDROID_PLATFORM=android-26 \
-            -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
+            -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=0x4000"
         check_command_result "configuring pdfiumAndroid"
 
         cmake --build ${BUILD_ROOT}/pdfiumAndroid/${ABI}/ -j10
@@ -123,8 +126,40 @@ build_pdfiumAndroid() {
         
         # Copy the built libjniPdfium.so to the jni/lib directory for packaging
         echo "Copying libjniPdfium.so for ${ABI}"
-        cp -fv ${BUILD_ROOT}/pdfiumAndroid/${ABI}/libjniPdfium.so src/main/jni/lib/${ABI}/libjniPdfium.so
-        check_command_result "copying libjniPdfium.so for ${ABI}"
+        cp ${BUILD_ROOT}/pdfiumAndroid/${ABI}/libjniPdfium.so src/main/jni/lib/${ABI}/
+
+        # Copy the correct libc++_shared.so from the NDK for each ABI
+        echo "Copying libc++_shared.so for ${ABI}"
+        
+        # Map ABI to target triple for NDK 28
+        case ${ABI} in
+            "arm64-v8a")
+                TARGET_TRIPLE="aarch64-linux-android"
+                ;;
+            "armeabi-v7a")
+                TARGET_TRIPLE="arm-linux-androideabi"
+                ;;
+            "x86")
+                TARGET_TRIPLE="i686-linux-android"
+                ;;
+            "x86_64")
+                TARGET_TRIPLE="x86_64-linux-android"
+                ;;
+            *)
+                echo "Unknown ABI: ${ABI}"
+                continue
+                ;;
+        esac
+        
+        # NDK 28 path structure
+        LIBCPP_PATH="$NDK_ROOT/toolchains/llvm/prebuilt/windows-x86_64/sysroot/usr/lib/${TARGET_TRIPLE}/libc++_shared.so"
+        
+        if [ -f "$LIBCPP_PATH" ]; then
+            cp "$LIBCPP_PATH" src/main/jni/lib/${ABI}/
+            echo "  ✓ Copied libc++_shared.so for ${ABI}"
+        else
+            echo "  ✗ libc++_shared.so not found at: $LIBCPP_PATH"
+        fi
     done
 }
 
