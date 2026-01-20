@@ -2,10 +2,35 @@
 
 # This script can be used to build PdfiumAndroid library (libjniPdfium) and its dependent libraries(libpng and libfreetype2).
 
-export NDK_ROOT=/d/Android/ndk/28.2.13676358
+# NDK root:
+# - Prefer an externally provided NDK_ROOT if already set.
+# - On macOS (Darwin), default to Android Studio SDK location under $HOME.
+# - Otherwise keep the original default path.
+if [ -z "${NDK_ROOT}" ]; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+        export NDK_ROOT="${HOME}/Library/Android/sdk/ndk/28.2.13676358"
+    else
+        export NDK_ROOT=/d/Android/ndk/28.2.13676358
+    fi
+fi
+echo "Using NDK_ROOT: ${NDK_ROOT}"
 
 export BUILD_ROOT="builddir"
 rm -fr ${BUILD_ROOT}
+
+# Choose CMake generator automatically so this script can build without Ninja.
+# - If Ninja exists, prefer it (faster builds)
+# - Otherwise fall back to Unix Makefiles (requires `make`)
+# You can override by exporting CMAKE_GENERATOR, e.g.:
+#   export CMAKE_GENERATOR="Unix Makefiles"
+if [ -z "${CMAKE_GENERATOR}" ]; then
+    if command -v ninja >/dev/null 2>&1; then
+        CMAKE_GENERATOR="Ninja"
+    else
+        CMAKE_GENERATOR="Unix Makefiles"
+    fi
+fi
+echo "Using CMake generator: ${CMAKE_GENERATOR}"
 
 # LIST OF ARCHS TO BE BUILT.
 if [ -z "${BUILD_ARCHS}" ]; then
@@ -33,7 +58,7 @@ build_libpng() {
     for ABI in ${BUILD_ARCHS}; do
         export BUILD_DIR=${BUILD_ROOT}/libpng/${ABI}
         rm -fr ${BUILD_DIR} &&
-        cmake -G "Ninja" -B ${BUILD_DIR} -S libpng \
+        cmake -G "${CMAKE_GENERATOR}" -B ${BUILD_DIR} -S libpng \
             -DCMAKE_ANDROID_NDK=${NDK_ROOT} \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_ANDROID_ARCH_ABI=${ABI} \
@@ -61,7 +86,7 @@ build_libfreetype2() {
     for ABI in ${BUILD_ARCHS}; do
         export BUILD_DIR=${BUILD_ROOT}/${SRC_DIR}/${ABI}
         rm -fr ${BUILD_DIR} &&
-        cmake -G "Ninja" -B ${BUILD_DIR} -S ${SRC_DIR} \
+        cmake -G "${CMAKE_GENERATOR}" -B ${BUILD_DIR} -S ${SRC_DIR} \
             -DCMAKE_ANDROID_NDK=${NDK_ROOT} \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_ANDROID_ARCH_ABI=${ABI} \
@@ -81,7 +106,7 @@ build_libfreetype2() {
 build_pdfiumAndroid() {
 
     for ABI in ${BUILD_ARCHS}; do
-        cmake -G "Ninja" -B ${BUILD_ROOT}/pdfiumAndroid/${ABI}/ \
+        cmake -G "${CMAKE_GENERATOR}" -B ${BUILD_ROOT}/pdfiumAndroid/${ABI}/ \
             -S . \
             -DCMAKE_BUILD_TYPE=Release \
             -DANDROID_NDK=${NDK_ROOT} \
